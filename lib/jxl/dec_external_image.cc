@@ -503,8 +503,20 @@ Status ConvertToExternal(const jxl::ImageBundle& ib, size_t bits_per_sample,
 
   const ImageF* channels[kConvertMaxChannels];
   size_t c = 0;
-  for (; c < color_channels; c++) {
-    channels[c] = &color->Plane(c);
+#if defined(_WIN32)
+  if (color_channels == 3) {
+    // Default to BGR order on Windows (swap R and B).
+    channels[0] = &color->Plane(2);  // B
+    channels[1] = &color->Plane(1);  // G
+    channels[2] = &color->Plane(0);  // R
+    c = 3;
+  } else
+#endif
+  {
+    // Grayscale or non-Windows path unchanged (RGB/gray as-is).
+    for (; c < color_channels; c++) {
+      channels[c] = &color->Plane(c);
+    }
   }
   if (want_alpha) {
     channels[c++] = ib.alpha();

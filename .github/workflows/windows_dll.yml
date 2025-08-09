@@ -1,0 +1,85 @@
+name: Windows DLL Build
+
+on:
+  push:
+    branches: [ main, "v*.*.x", "**" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build_windows_dll:
+    name: Build Windows DLLs (MSYS2 MinGW64)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: true
+          fetch-depth: 1
+
+      - name: Setup MSYS2 (mingw64)
+        uses: msys2/setup-msys2@07aeda7763550b267746a772dcea5e5ac3340b36 # v2
+        with:
+          msystem: mingw64
+          update: true
+          path-type: inherit
+          install: >-
+            base-devel
+            git
+            procps
+          pacboy: >-
+            brotli:p
+            cmake:p
+            giflib:p
+            libjpeg-turbo:p
+            libpng:p
+            libwebp:p
+            ninja:p
+            toolchain:p
+
+      - name: Configure (CMake, shared libs only)
+        run: |
+          cmake \
+            -S . -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON \
+            -DBUILD_TESTING=OFF \
+            -DJPEGXL_ENABLE_TOOLS=OFF \
+            -DJPEGXL_ENABLE_DEVTOOLS=OFF \
+            -DJPEGXL_ENABLE_EXAMPLES=OFF \
+            -DJPEGXL_ENABLE_BENCHMARK=OFF \
+            -DJPEGXL_ENABLE_JNI=OFF \
+            -DJPEGXL_ENABLE_PLUGINS=OFF \
+            -DJPEGXL_ENABLE_MANPAGES=OFF \
+            -DJPEGXL_ENABLE_DOXYGEN=OFF \
+            -DJPEGXL_FORCE_SYSTEM_BROTLI=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: List produced DLLs
+        run: |
+          echo "DLLs in build/bin:" && ls -la build/bin || true
+          echo "DLLs in build/lib:" && ls -la build/lib || true
+
+      - name: Upload DLL artifacts
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: libjxl-windows-dlls
+          path: |
+            build/bin/jxl*.dll
+            build/bin/libjxl*.dll
+            build/lib/jxl*.dll
+            build/lib/libjxl*.dll
+          if-no-files-found: error
